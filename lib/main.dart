@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 
 import 'package:dxf/dxf.dart' hide XFile;
 import 'package:dxf_2d_tool/ui/canvas_drawer.dart';
@@ -7,6 +8,11 @@ import 'package:flutter/material.dart' hide XFile;
 import 'package:flutter/services.dart' hide XFile;
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart' hide XFile;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:convert' show utf8;
+
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' show AnchorElement;
 
 void main() {
   runApp(const MyApp());
@@ -52,38 +58,50 @@ class _MyHomePageState extends State<MyHomePage> {
     super.initState();
   }
 
+  void saveTextFile(String text, String filename) {
+    AnchorElement()
+      ..href =
+          '${Uri.dataFromString(text, mimeType: 'image/x-dxf', encoding: utf8)}'
+      ..download = filename
+      ..style.display = 'none'
+      ..click();
+  }
+
   Future<void> _export() async {
     final dxf = DXF.create();
     for (RectangleElement element in elements)
       dxf.addEntities(element.dumpToCad());
-    print(dxf.dxfString);
-    final box = context.findRenderObject() as RenderBox?;
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-    // List<int> list = dxf.dxfString.codeUnits;
-    // Uint8List bytes = Uint8List.fromList(list);
+    if (kIsWeb) {
+      saveTextFile(dxf.dxfString, 'sample_export.dxf');
+    } else {
+      //print(dxf.dxfString);
+      final box = context.findRenderObject() as RenderBox?;
+      final scaffoldMessenger = ScaffoldMessenger.of(context);
+      // List<int> list = dxf.dxfString.codeUnits;
+      // Uint8List bytes = Uint8List.fromList(list);
 
+      final Directory output = await getTemporaryDirectory();
+      final String screenshotFilePath = '${output.path}/sample_export.dxf';
+      final File screenshotFile = File(screenshotFilePath);
+      //await screenshotFile.writeAsBytes(bytes!);
+      await screenshotFile.writeAsString(dxf.dxfString);
 
-    final Directory output = await getTemporaryDirectory();
-    final String screenshotFilePath = '${output.path}/sample_export.dxf';
-    final File screenshotFile = File(screenshotFilePath);
-    //await screenshotFile.writeAsBytes(bytes!);
-    await screenshotFile.writeAsString(dxf.dxfString);
+      final shareResult = await Share.shareXFiles(
+        subject: 'Export from 2D to DFX Test App',
+        text: 'sample_export.dxf file',
+        [
+          // XFile.fromData(
+          //   bytes,
+          //   name: 'sample_export.dxf',
+          //   mimeType: 'image/x-dxf',
+          // ),
+          XFile(screenshotFilePath)
+        ],
+        sharePositionOrigin: box!.localToGlobal(Offset.zero) & box.size,
+      );
 
-    final shareResult = await Share.shareXFiles(
-      subject: 'Export from 2D to DFX Test App',
-      text: 'sample_export.dxf file',
-      [
-        // XFile.fromData(
-        //   bytes,
-        //   name: 'sample_export.dxf',
-        //   mimeType: 'image/x-dxf',
-        // ),
-        XFile(screenshotFilePath)
-      ],
-      sharePositionOrigin: box!.localToGlobal(Offset.zero) & box.size,
-    );
-
-    scaffoldMessenger.showSnackBar(getResultSnackBar(shareResult));
+      scaffoldMessenger.showSnackBar(getResultSnackBar(shareResult));
+    }
     setState(() {});
   }
 
@@ -183,7 +201,10 @@ class _MyHomePageState extends State<MyHomePage> {
                     bottom: renderBox.globalToLocal(details.localPosition).dy +
                         (_mode == 0
                             ? COUNTERTOP_DEF_WIDTH_IN_INCHES
-                            : ISLAND_DEF_WIDTH_IN_INCHES));
+                            : ISLAND_DEF_WIDTH_IN_INCHES),
+                    height: (_mode == 0
+                        ? COUNTERTOP_DEF_WIDTH_IN_INCHES
+                        : ISLAND_DEF_WIDTH_IN_INCHES));
                 elements.add(test!);
               }
             });
@@ -193,10 +214,31 @@ class _MyHomePageState extends State<MyHomePage> {
           RenderBox? renderBox = context.findRenderObject() as RenderBox?;
           if (renderBox != null) {
             setState(() {
-              // test!.bottom = test!.top + (_mode == 0
-              //     ? COUNTERTOP_DEF_WIDTH_IN_INCHES
-              //     : ISLAND_DEF_WIDTH_IN_INCHES); //renderBox.globalToLocal(details.localPosition).dx;
-              test!.right = renderBox.globalToLocal(details.localPosition).dx;
+              if ((renderBox.globalToLocal(details.localPosition).dy -
+                          test!.top >=
+                      test!.height!) &&
+                  (renderBox.globalToLocal(details.localPosition).dx -
+                          test!.left >
+                      0)) {
+                test!.right = renderBox.globalToLocal(details.localPosition).dx;
+                test!.bottom =
+                    renderBox.globalToLocal(details.localPosition).dy;
+                test!.heightExtra = max(
+                    0,
+                    renderBox.globalToLocal(details.localPosition).dy -
+                        test!.top -
+                        test!.height!);
+                //test!.height = test!.bottom! - test!.top - test!.heightExtra!;
+              } else {
+                test!.heightExtra = 0;
+                test!.bottom = test!.top + test!.height!;
+                if (renderBox.globalToLocal(details.localPosition).dx -
+                        test!.left >
+                    0) {
+                  test!.right =
+                      renderBox.globalToLocal(details.localPosition).dx;
+                }
+              }
             });
           }
         },
@@ -303,11 +345,13 @@ class _MyHomePageState extends State<MyHomePage> {
               child: const Text('Save'),
               onPressed: () {
                 setState(() {
-                  //test!.width = double.parse(widthController.text);
-                  //test!.height = double.parse(heightController.text);
                   test!.right = test!.left + double.parse(widthController.text);
                   test!.bottom =
                       test!.top + double.parse(heightController.text);
+                  test!.width = double.parse(widthController.text);
+                  test!.height = double.parse(heightController.text);
+                  test!.heightExtra =
+                      max(0, test!.bottom! - test!.top - test!.height!);
                 });
                 Navigator.of(context).pop();
               },

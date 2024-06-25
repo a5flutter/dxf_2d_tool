@@ -9,12 +9,12 @@ class RectangleDrawer extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
         if(element != null) canvas.drawDRRect(element!.dumpToRDraw(), element!.dumpToInnerRDraw(), Paint()
-          ..style = PaintingStyle.stroke
+          ..style = PaintingStyle.fill
           ..strokeCap = StrokeCap.square
           ..isAntiAlias = true
-          ..color = Colors.green
+          ..color = Colors.green.withAlpha(50)
           ..strokeWidth = 1.0
-        ) ;
+        );
   }
   @override
   bool shouldRepaint(covariant RectangleDrawer oldDelegate) => true;
