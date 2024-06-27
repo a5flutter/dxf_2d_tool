@@ -45,7 +45,7 @@ class RectangleElement {
     if(right == null && width != null) right = left + width!;
     if (height != null)
       return RRect.fromLTRBR(
-          left, top + height!, right! - height!, bottom!, Radius.zero);
+          left, top + height!, (right ?? (left + (width ?? 0.0))) - height!, bottom!, Radius.zero);
     else
       return RRect.zero; //degenerate rectangle
   }

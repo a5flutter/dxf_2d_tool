@@ -12,7 +12,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:convert' show utf8;
 
 // ignore: avoid_web_libraries_in_flutter
-import 'dart:html' show AnchorElement;
+import 'package:universal_html/html.dart' show AnchorElement;
 
 void main() {
   runApp(const MyApp());
@@ -48,6 +48,7 @@ class _MyHomePageState extends State<MyHomePage> {
   int _mode = 0; //0 for Kitchen Countertop and 1 for Island
   static double COUNTERTOP_DEF_WIDTH_IN_INCHES = 25.5;
   static double ISLAND_DEF_WIDTH_IN_INCHES = 30;
+  bool showRedZone = false;
 
   RectangleElement? test;
   late List<RectangleElement> elements;
@@ -138,6 +139,39 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
+  void _updateLocation(PointerEvent details) {
+    //print('_updateLocation called');
+    RenderBox renderBox = context.findRenderObject() as RenderBox;
+
+    if (renderBox != null) {
+      for (RectangleElement element in elements) {
+        if (renderBox.globalToLocal(details.localPosition).dx >
+            element.left &&
+            renderBox.globalToLocal(details.localPosition).dx <
+                (element.right ?? element.left + element.width!) &&
+            renderBox.globalToLocal(details.localPosition).dy >
+                element.top &&
+            renderBox.globalToLocal(details.localPosition).dy <
+                (element.bottom ?? element.top + element.height!)) {
+          setState(() {
+            test = element;
+            showRedZone = true;
+            //print('showRedZone set to true');
+          });
+          return;
+        }
+      }
+
+      setState(() {
+        //test = null;
+        showRedZone = false;
+        //print('showRedZone set to false');
+      });
+      return;
+    }
+  }
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -145,7 +179,10 @@ class _MyHomePageState extends State<MyHomePage> {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: Text(widget.title),
       ),
-      body: GestureDetector(
+      body: MouseRegion(
+        hitTestBehavior: HitTestBehavior.translucent,
+        onHover: _updateLocation,
+        child: GestureDetector(
         // onDoubleTap: () {
         //   print('onDoubleTap');
         // },
@@ -250,7 +287,7 @@ class _MyHomePageState extends State<MyHomePage> {
         },
         child: CustomPaint(
           painter: CanvasDrawer(elements: elements),
-          child: Container(),
+          child: Container()),
         ),
       ),
       floatingActionButton: Row(
